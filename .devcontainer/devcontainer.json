@@ -21,7 +21,7 @@
 
   "postCreateCommand": "npm install",
 
-  "postStartCommand": "bash .devcontainer/setup.sh && npm start",
+  "postStartCommand": "bash .devcontainer/setup.sh && nohup npm start > /tmp/server.log 2>&1 &",
 
   "customizations": {
     "vscode": {
