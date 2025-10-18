@@ -34,7 +34,17 @@ const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
 const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
 const TWILIO_PHONE_NUMBER = process.env.TWILIO_PHONE_NUMBER;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const PUBLIC_URL = process.env.PUBLIC_URL || `http://localhost:${PORT}`;
+
+// Auto-detect Codespace URL
+const CODESPACE_NAME = process.env.CODESPACE_NAME;
+const GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN = process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN;
+let PUBLIC_URL = process.env.PUBLIC_URL;
+
+if (!PUBLIC_URL && CODESPACE_NAME && GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN) {
+  PUBLIC_URL = `https://${CODESPACE_NAME}-${PORT}.${GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}`;
+} else if (!PUBLIC_URL) {
+  PUBLIC_URL = `http://localhost:${PORT}`;
+}
 
 // Validate environment variables (optional for development/testing)
 if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN) {
