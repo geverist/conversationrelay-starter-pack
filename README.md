@@ -527,6 +527,27 @@ curl -X POST http://localhost:3000/voice-handler \
   -d "To=+15559876543"
 ```
 
+### Test WebSocket with Simulated Media Stream
+
+The `test-websocket.js` script simulates Twilio's media stream format to test your WebSocket handler locally:
+
+```bash
+# From within your Codespace or local environment
+node test-websocket.js
+```
+
+This will:
+- Connect to your WebSocket server
+- Send Twilio-formatted events (`connected`, `start`, `media`, `mark`)
+- Simulate 10 audio packets (mulaw silence)
+- Display all responses from your server
+- Run for 10 seconds then close
+
+**For external URLs (like Codespaces):**
+```bash
+WS_URL=wss://your-codespace-url-3000.app.github.dev node test-websocket.js
+```
+
 ### Test with Real Call
 
 1. Call your Twilio phone number
