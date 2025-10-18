@@ -1,8 +1,10 @@
 # 🎙️ ConversationRelay Starter Pack
 
-Your AI-powered voice assistant built with [Twilio ConversationRelay](https://www.twilio.com/docs/voice/conversationrelay) and OpenAI Realtime API.
+Your AI-powered voice assistant built with [Twilio ConversationRelay](https://www.twilio.com/docs/voice/conversationrelay).
 
-This starter pack provides a complete foundation for building sophisticated voice AI applications with real-time bidirectional streaming between callers and AI.
+This starter pack provides a complete foundation for building sophisticated voice AI applications. **ConversationRelay handles all the audio processing** (speech-to-text, text-to-speech) - you just focus on the AI logic, prompting, and tools.
+
+**Use ANY LLM**: OpenAI, Anthropic Claude, Google Gemini, local models, or any text-based AI.
 
 ## 🚀 Quick Deploy
 
@@ -25,17 +27,30 @@ This starter pack provides a complete foundation for building sophisticated voic
 ## 🏗️ Architecture
 
 ```
-┌─────────────┐         ┌─────────────────┐         ┌──────────────┐
-│   Caller    │ ◄─────► │  Your Server    │ ◄─────► │   OpenAI     │
-│   (Phone)   │  Voice  │  (This Project) │  API    │   Realtime   │
-└─────────────┘         └─────────────────┘         └──────────────┘
-                              │
-                              │ TwiML
-                              ▼
-                        ┌─────────────┐
-                        │   Twilio    │
-                        │   Voice     │
-                        └─────────────┘
+┌─────────────┐                                    ┌──────────────┐
+│   Caller    │ ◄──── Voice Audio ────────────────►│   Twilio     │
+│   (Phone)   │                                    │ ConversationRelay│
+└─────────────┘                                    └──────┬───────┘
+                                                          │
+                        ┌─────────────────────────────────┤
+                        │                                 │
+                   Text Transcripts              Voice Synthesis
+                   (Deepgram STT)               (ElevenLabs TTS)
+                        │                                 │
+                        ▼                                 ▲
+                ┌──────────────────┐                     │
+                │  Your Server     │──── Text Response ──┘
+                │  (WebSocket)     │
+                └────────┬─────────┘
+                         │
+                    Text to LLM
+                         │
+                         ▼
+                ┌──────────────────┐
+                │   Your LLM       │
+                │ (OpenAI, Claude, │
+                │  Gemini, etc.)   │
+                └──────────────────┘
 ```
 
 ### How It Works
@@ -43,8 +58,9 @@ This starter pack provides a complete foundation for building sophisticated voic
 1. **Incoming Call** → Twilio calls your `/voice-handler` endpoint
 2. **TwiML Response** → Your server returns ConversationRelay TwiML
 3. **WebSocket Connection** → Twilio connects to your WebSocket server
-4. **Audio Streaming** → Real-time audio flows: Caller ↔ Your Server ↔ OpenAI
-5. **AI Responses** → OpenAI generates responses, sent back to caller in real-time
+4. **Speech-to-Text** → Twilio (Deepgram) converts caller speech to text → sends `prompt` event
+5. **AI Processing** → Your server sends text to ANY LLM (OpenAI, Claude, etc.)
+6. **Text Response** → Your server sends back text → Twilio speaks it (ElevenLabs TTS)
 
 ## 🛠️ Local Setup
 
@@ -166,38 +182,54 @@ function voiceHandler(callData, publicUrl) {
   connect.conversationRelay({
     url: `wss://${publicUrl.replace('https://', '').replace('http://', '')}`,
     voice: 'Polly.Joanna-Neural',
+    ttsProvider: 'amazon-polly',  // or 'elevenlabs' for premium voices
+    transcriptionProvider: 'deepgram',  // Deepgram for STT
     dtmfDetection: true
   });
   return twiml;
 }
 ```
 
-Edit `handlers/websocket-handler.js` to add OpenAI integration:
+Edit `handlers/websocket-handler.js` to add LLM integration:
 
 ```javascript
+const OpenAI = require('openai');
 const openai = new OpenAI({ apiKey: openaiApiKey });
-const openaiWs = openai.realtime.connect();
 
-// Route messages between Twilio and OpenAI
-ws.on('message', (message) => {
+ws.on('message', async (message) => {
   const data = JSON.parse(message);
-  if (data.event === 'media') {
-    // Forward audio to OpenAI
-    openaiWs.send(JSON.stringify({
-      type: 'input_audio_buffer.append',
-      audio: data.media.payload
-    }));
-  }
-});
 
-openaiWs.on('message', (message) => {
-  const response = JSON.parse(message);
-  if (response.type === 'response.audio.delta') {
-    // Forward AI audio to Twilio
-    ws.send(JSON.stringify({
-      event: 'media',
-      media: { payload: response.delta }
-    }));
+  switch (data.type) {
+    case 'setup':
+      // Call started - store session info
+      console.log('Call from:', data.from, 'to:', data.to);
+      break;
+
+    case 'prompt':
+      // Caller spoke - we got text from Deepgram
+      console.log('Caller said:', data.voicePrompt);
+
+      // Send to your LLM (OpenAI Chat API - text-based, NOT Realtime)
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: 'You are a helpful assistant' },
+          { role: 'user', content: data.voicePrompt }
+        ]
+      });
+
+      // Send text response back - Twilio will speak it via ElevenLabs
+      ws.send(JSON.stringify({
+        type: 'text',
+        token: completion.choices[0].message.content,
+        last: true
+      }));
+      break;
+
+    case 'dtmf':
+      // Caller pressed keypad button
+      console.log('DTMF digit:', data.digit);
+      break;
   }
 });
 ```
@@ -293,6 +325,166 @@ npm start
 - `PUBLIC_URL` (your server's public URL)
 - `PORT` (defaults to 3000)
 
+## 📊 Conversational Intelligence (Optional)
+
+Add AI-powered call analytics to your application with Twilio Conversational Intelligence.
+
+### What is Conversational Intelligence?
+
+Conversational Intelligence automatically:
+- **Transcribes calls** with Deepgram speech-to-text
+- **Analyzes sentiment** to understand caller emotions
+- **Detects topics** to categorize conversations
+- **Identifies PII** for compliance and privacy
+- **Extracts keywords** for searchability
+
+### Setup Steps
+
+#### 1. Create Intelligence Service
+
+Create a Conversational Intelligence service in your Twilio Console or via API:
+
+```javascript
+// Create CI service (one-time setup)
+const response = await fetch('https://intelligence.twilio.com/v2/Services', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Basic ${Buffer.from(`${accountSid}:${authToken}`).toString('base64')}`,
+    'Content-Type': 'application/x-www-form-urlencoded'
+  },
+  body: new URLSearchParams({
+    UniqueName: 'my-voice-ai-analytics',
+    FriendlyName: 'Voice AI Analytics',
+    AutoTranscribe: 'true',
+    LanguageCode: 'en-US'
+  })
+});
+
+const service = await response.json();
+console.log('CI Service SID:', service.sid);
+```
+
+Add the service SID to your `.env`:
+
+```bash
+CI_SERVICE_SID=ISxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+#### 2. Attach Language Operators
+
+Attach pre-built Language Operators for sentiment analysis, PII redaction, etc.:
+
+```javascript
+// Sentiment Analysis Operator
+await fetch(
+  `https://intelligence.twilio.com/v2/Services/${serviceSid}/Operators/LY4ce7be83d88649e3a24b23571077c122`,
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': `Basic ${auth}`
+    }
+  }
+);
+
+// PII Redaction Operator
+await fetch(
+  `https://intelligence.twilio.com/v2/Services/${serviceSid}/Operators/LYbcd7006fc1f69d0c522e6fde532856eb`,
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': `Basic ${auth}`
+    }
+  }
+);
+```
+
+#### 3. Create Transcripts After Each Call
+
+In your `websocket-handler.js`, create a transcript when the call ends:
+
+```javascript
+ws.on('close', async () => {
+  console.log('Call ended, creating CI transcript...');
+
+  if (callSid && process.env.CI_SERVICE_SID) {
+    // Get recording from the call
+    const recordings = await twilioClient.recordings.list({
+      callSid: callSid,
+      limit: 1
+    });
+
+    if (recordings.length > 0) {
+      const recording = recordings[0];
+
+      // Create transcript
+      await fetch('https://intelligence.twilio.com/v2/Transcripts', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${Buffer.from(
+            `${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`
+          ).toString('base64')}`,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: new URLSearchParams({
+          ServiceSid: process.env.CI_SERVICE_SID,
+          Channel: JSON.stringify({
+            media_properties: {
+              media_url: `https://api.twilio.com${recording.mediaUrl}`
+            }
+          }),
+          CustomerKey: callMetadata.from,
+          MediaStartTime: callMetadata.startTime
+        })
+      });
+
+      console.log('✅ CI Transcript created');
+    }
+  }
+});
+```
+
+#### 4. View Analytics
+
+Retrieve transcripts and analytics via the Intelligence API:
+
+```javascript
+// Fetch all transcripts
+const transcripts = await fetch(
+  `https://intelligence.twilio.com/v2/Transcripts?ServiceSid=${serviceSid}`,
+  {
+    headers: {
+      'Authorization': `Basic ${auth}`
+    }
+  }
+);
+
+// Get sentences (conversation text)
+const sentences = await fetch(
+  `https://intelligence.twilio.com/v2/Transcripts/${transcriptSid}/Sentences`,
+  {
+    headers: {
+      'Authorization': `Basic ${auth}`
+    }
+  }
+);
+
+// Get operator results (sentiment, PII, etc.)
+const operators = await fetch(
+  `https://intelligence.twilio.com/v2/Transcripts/${transcriptSid}/OperatorResults`,
+  {
+    headers: {
+      'Authorization': `Basic ${auth}`
+    }
+  }
+);
+```
+
+### Resources
+
+- [Conversational Intelligence Docs](https://www.twilio.com/docs/voice/intelligence)
+- [Intelligence API Reference](https://www.twilio.com/docs/voice/intelligence/api)
+- [Language Operators Catalog](https://www.twilio.com/docs/voice/intelligence/operators)
+
 ## 🔒 Security Best Practices
 
 1. **Never commit `.env`** - Already in `.gitignore`
@@ -327,7 +519,10 @@ curl -X POST http://localhost:3000/voice-handler \
 ## 📚 Resources
 
 - [Twilio ConversationRelay Docs](https://www.twilio.com/docs/voice/conversationrelay)
-- [OpenAI Realtime API Docs](https://platform.openai.com/docs/guides/realtime)
+- [ConversationRelay WebSocket Messages](https://www.twilio.com/docs/voice/conversationrelay/websocket-messages)
+- [OpenAI Chat API Docs](https://platform.openai.com/docs/api-reference/chat)
+- [Deepgram Speech-to-Text](https://www.twilio.com/docs/voice/conversationrelay#transcription-providers)
+- [ElevenLabs Text-to-Speech](https://www.twilio.com/docs/voice/conversationrelay#voice-synthesis-providers)
 - [Twilio Voice Webhooks](https://www.twilio.com/docs/voice/twiml)
 - [Node.js WebSocket (ws) Library](https://github.com/websockets/ws)
 
@@ -339,11 +534,11 @@ curl -X POST http://localhost:3000/voice-handler \
 - Check that your server is publicly accessible
 - Verify ngrok is running (for local dev)
 
-### OpenAI Authentication Error
+### LLM API Error
 
-- Verify `OPENAI_API_KEY` is set correctly
-- Check you have credits in your OpenAI account
-- Ensure API key has access to Realtime API
+- Verify your API key is set correctly in environment variables
+- Check you have credits in your account
+- Ensure your API key has access to the Chat/Completions API (not Realtime)
 
 ### Twilio Webhook Errors
 
@@ -354,7 +549,8 @@ curl -X POST http://localhost:3000/voice-handler \
 ### Call Connects but No Audio
 
 - Check WebSocket connection is established (see server logs)
-- Verify OpenAI API key has Realtime API access
+- Verify your LLM API key is working (test with curl)
+- Check server logs for errors in the `prompt` event handler
 - Ensure system prompt is configured in `config/system-prompt.js`
 
 ## 🤝 Contributing
@@ -373,4 +569,4 @@ MIT License - feel free to use this starter pack for any project!
 
 ---
 
-Built with ❤️ using [Twilio ConversationRelay](https://www.twilio.com/docs/voice/conversationrelay) and [OpenAI Realtime API](https://platform.openai.com/docs/guides/realtime)
+Built with ❤️ using [Twilio ConversationRelay](https://www.twilio.com/docs/voice/conversationrelay), [Deepgram STT](https://deepgram.com/), and [ElevenLabs TTS](https://elevenlabs.io/)

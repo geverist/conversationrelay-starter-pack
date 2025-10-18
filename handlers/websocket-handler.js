@@ -5,11 +5,14 @@ const tools = require('./tools');
 /**
  * WebSocket Handler - Manages ConversationRelay WebSocket connection
  *
- * This handler manages the bidirectional streaming between:
- * - Twilio (caller's audio)
- * - OpenAI Realtime API (AI conversation)
+ * ConversationRelay Architecture:
+ * - Twilio handles: Speech-to-Text (Deepgram), Text-to-Speech (ElevenLabs), audio streaming
+ * - Your server handles: LLM processing (text-based), prompting, tools/functions
  *
- * @param {WebSocket} ws - WebSocket connection
+ * You receive TEXT from Twilio (from Deepgram STT)
+ * You send back TEXT to Twilio (Twilio uses ElevenLabs TTS to speak it)
+ *
+ * @param {WebSocket} ws - WebSocket connection from Twilio
  * @param {Object} config - Configuration object
  */
 function websocketHandler(ws, config) {
@@ -17,57 +20,230 @@ function websocketHandler(ws, config) {
 
   console.log(`📞 ConversationRelay connected: ${streamSid}`);
 
-  // TODO: Step 5 - Initialize OpenAI Realtime API connection
-  // const openai = new OpenAI({ apiKey: openaiApiKey });
-  // const openaiWs = openai.realtime.connect();
+  // Initialize OpenAI (or any other LLM)
+  const openai = new OpenAI({ apiKey: openaiApiKey });
 
-  // TODO: Step 6 - Set up message routing
-  // Route messages between Twilio and OpenAI
+  // Store conversation history for context
+  const conversationHistory = [];
 
-  // Handle incoming messages from Twilio
-  ws.on('message', (message) => {
+  // Store call metadata for Conversational Intelligence
+  let callSid = null;
+  let callMetadata = {
+    from: null,
+    to: null,
+    direction: null,
+    startTime: new Date().toISOString()
+  };
+
+  // Handle incoming messages from Twilio ConversationRelay
+  ws.on('message', async (message) => {
     try {
       const data = JSON.parse(message);
 
-      // TODO: Handle different message types from Twilio
-      // - 'start': Connection established
-      // - 'media': Audio data from caller
-      // - 'stop': Call ended
+      switch (data.type) {
+        // ----------------------------------------------------------------------
+        // Event: SETUP - Initial connection with call metadata
+        // ----------------------------------------------------------------------
+        case 'setup':
+          console.log('📞 Call Setup:');
+          console.log('  Session ID:', data.sessionId);
+          console.log('  Call SID:', data.callSid);
+          console.log('  From:', data.from);
+          console.log('  To:', data.to);
+          console.log('  Direction:', data.direction);
 
-      console.log('📥 Twilio message:', data.event);
+          // Store call metadata for Conversational Intelligence
+          callSid = data.callSid;
+          callMetadata.from = data.from;
+          callMetadata.to = data.to;
+          callMetadata.direction = data.direction;
+          callMetadata.sessionId = data.sessionId;
+          break;
 
-      // TODO: Forward audio to OpenAI
-      // TODO: Send events to OpenAI (e.g., DTMF, interruptions)
+        // ----------------------------------------------------------------------
+        // Event: PROMPT - Caller spoke, we got their words as TEXT
+        // ----------------------------------------------------------------------
+        case 'prompt':
+          console.log('🗣️ Caller said:', data.voicePrompt);
+          console.log('  Language:', data.lang);
+          console.log('  Is final:', data.last);
+
+          // Add to conversation history
+          conversationHistory.push({
+            role: 'user',
+            content: data.voicePrompt
+          });
+
+          // ====================================================================
+          // AI PROCESSING: Send to your LLM (text-based)
+          // ====================================================================
+          // You can use ANY LLM here: OpenAI, Claude, Gemini, local models, etc.
+          // Twilio handles all the audio - you just process text!
+          try {
+            const completion = await openai.chat.completions.create({
+              model: 'gpt-4o-mini',  // Fast, affordable model
+              messages: [
+                {
+                  role: 'system',
+                  content: systemPrompt  // Your custom AI personality
+                },
+                ...conversationHistory
+              ],
+              max_tokens: 150,  // Keep responses concise for voice
+              temperature: 0.7
+            });
+
+            const aiResponse = completion.choices[0].message.content;
+            console.log('🤖 AI response:', aiResponse);
+
+            // Add to conversation history
+            conversationHistory.push({
+              role: 'assistant',
+              content: aiResponse
+            });
+
+            // ==================================================================
+            // Send TEXT response back to Twilio
+            // Twilio will convert it to speech using ElevenLabs TTS
+            // ==================================================================
+            ws.send(JSON.stringify({
+              type: 'text',
+              token: aiResponse,
+              last: true  // Indicates this is the complete response
+            }));
+
+          } catch (aiError) {
+            console.error('❌ LLM API error:', aiError);
+
+            // Send error response to caller
+            ws.send(JSON.stringify({
+              type: 'text',
+              token: 'I apologize, I encountered an error processing your request.',
+              last: true
+            }));
+          }
+          break;
+
+        // ----------------------------------------------------------------------
+        // Event: DTMF - Caller pressed a keypad button
+        // ----------------------------------------------------------------------
+        case 'dtmf':
+          console.log('🔢 DTMF digit pressed:', data.digit);
+
+          // Handle keypad input (useful for IVR-style menus)
+          // Example: "Press 1 for sales, 2 for support"
+          if (data.digit === '1') {
+            ws.send(JSON.stringify({
+              type: 'text',
+              token: 'You pressed 1. Transferring to sales.',
+              last: true
+            }));
+          } else if (data.digit === '2') {
+            ws.send(JSON.stringify({
+              type: 'text',
+              token: 'You pressed 2. Transferring to support.',
+              last: true
+            }));
+          }
+          break;
+
+        // ----------------------------------------------------------------------
+        // Event: INTERRUPT - Caller interrupted the AI mid-sentence
+        // ----------------------------------------------------------------------
+        case 'interrupt':
+          console.log('⚠️ Caller interrupted at:', data.utteranceUntilInterrupt);
+          console.log('  Duration:', data.durationUntilInterruptMs, 'ms');
+
+          // Handle interruption
+          // You may want to cancel any pending LLM requests here
+          break;
+
+        // ----------------------------------------------------------------------
+        // Unknown events (log for debugging)
+        // ----------------------------------------------------------------------
+        default:
+          console.log('❓ Unknown event type:', data.type);
+      }
 
     } catch (error) {
       console.error('❌ Error parsing message:', error);
     }
   });
 
-  // TODO: Handle messages from OpenAI
-  // openaiWs.on('message', (message) => {
-  //   // Forward AI responses back to Twilio
-  //   // Handle function calls
-  //   // Manage conversation state
-  // });
-
   // Handle connection close
-  ws.on('close', () => {
+  ws.on('close', async () => {
     console.log(`📞 ConversationRelay disconnected: ${streamSid}`);
-    // TODO: Close OpenAI connection
-    // TODO: Clean up resources
+
+    // =========================================================================
+    // CREATE CONVERSATIONAL INTELLIGENCE TRANSCRIPT
+    // =========================================================================
+    // This automatically creates a transcript for post-call analytics
+    if (callSid && process.env.CI_SERVICE_SID) {
+      try {
+        console.log('📊 Creating Conversational Intelligence transcript...');
+
+        // Get the recording SID from the call
+        const call = await twilioClient.calls(callSid).fetch();
+
+        // Get the most recent recording for this call
+        const recordings = await twilioClient.recordings.list({
+          callSid: callSid,
+          limit: 1
+        });
+
+        if (recordings.length > 0) {
+          const recordingSid = recordings[0].sid;
+          const mediaUrl = recordings[0].mediaUrl;
+
+          // Create transcript in Conversational Intelligence
+          const transcriptResponse = await fetch(
+            `https://intelligence.twilio.com/v2/Transcripts`,
+            {
+              method: 'POST',
+              headers: {
+                'Authorization': `Basic ${Buffer.from(
+                  `${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`
+                ).toString('base64')}`,
+                'Content-Type': 'application/x-www-form-urlencoded'
+              },
+              body: new URLSearchParams({
+                ServiceSid: process.env.CI_SERVICE_SID,
+                Channel: JSON.stringify({
+                  media_properties: {
+                    media_url: `https://api.twilio.com${mediaUrl}`
+                  }
+                }),
+                CustomerKey: callMetadata.from,
+                MediaStartTime: callMetadata.startTime
+              })
+            }
+          );
+
+          if (transcriptResponse.ok) {
+            const transcriptData = await transcriptResponse.json();
+            console.log('✅ CI Transcript created:', transcriptData.sid);
+            console.log('   View analytics at: https://console.twilio.com/us1/develop/intelligence');
+          } else {
+            const errorText = await transcriptResponse.text();
+            console.warn('⚠️ Failed to create CI transcript:', errorText);
+          }
+        } else {
+          console.warn('⚠️ No recording found for call:', callSid);
+        }
+
+      } catch (ciError) {
+        console.error('❌ CI transcript creation error:', ciError);
+        // Don't fail the call disconnect if CI fails
+      }
+    }
+
+    // Optional: Save conversation history to database
   });
 
   // Handle errors
   ws.on('error', (error) => {
     console.error('❌ WebSocket error:', error);
   });
-
-  // TODO: Step 7 - Send initial system prompt to OpenAI
-  // Configure the AI's personality and behavior
-
-  // TODO: Step 8 - Configure function calling / tools
-  // Enable the AI to call external functions (e.g., database lookups, API calls)
 }
 
 module.exports = websocketHandler;

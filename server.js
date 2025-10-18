@@ -22,15 +22,17 @@ const TWILIO_PHONE_NUMBER = process.env.TWILIO_PHONE_NUMBER;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const PUBLIC_URL = process.env.PUBLIC_URL || `http://localhost:${PORT}`;
 
-// Validate required environment variables
+// Validate environment variables (optional for development/testing)
 if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN) {
-  console.error('❌ Missing required environment variables. Please check your .env file.');
-  console.error('   Required: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN');
-  process.exit(1);
+  console.warn('⚠️  TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN not set.');
+  console.warn('   Server will start but Twilio features will be limited.');
+  console.warn('   Add these to your .env file for full functionality.');
 }
 
-// Initialize Twilio client
-const twilioClient = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+// Initialize Twilio client (only if credentials provided)
+const twilioClient = (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN)
+  ? twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+  : null;
 
 // Import handlers
 const voiceHandler = require('./handlers/voice-handler');
