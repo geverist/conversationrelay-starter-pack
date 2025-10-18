@@ -6,6 +6,23 @@ This starter pack provides a complete foundation for building sophisticated voic
 
 **Use ANY LLM**: OpenAI, Anthropic Claude, Google Gemini, local models, or any text-based AI.
 
+## 🚀 Quick Start (GitHub Codespaces)
+
+The server should start automatically when you open this Codespace. If it doesn't:
+
+```bash
+bash start-server.sh
+```
+
+That's it! The server will run in the background on port 3000.
+
+**View logs:** `tail -f server.log`
+**Restart server:** `pkill -f 'node.*server.js' && bash start-server.sh`
+
+Return to the workshop UI to continue!
+
+---
+
 ## 🚀 Quick Deploy
 
 ### Deploy to Railway
