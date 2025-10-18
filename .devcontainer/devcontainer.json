@@ -13,14 +13,15 @@
   "portsAttributes": {
     "3000": {
       "label": "WebSocket Server",
-      "onAutoForward": "notify",
-      "visibility": "public"
+      "onAutoForward": "openBrowser",
+      "visibility": "public",
+      "protocol": "https"
     }
   },
 
   "postCreateCommand": "npm install",
 
-  "postStartCommand": "npm start",
+  "postStartCommand": "bash .devcontainer/setup.sh && npm start",
 
   "customizations": {
     "vscode": {
