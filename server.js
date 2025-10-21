@@ -144,8 +144,56 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'healthy',
     websocket: wss.clients.size + ' active connections',
+    publicUrl: PUBLIC_URL,
+    websocketUrl: PUBLIC_URL.replace(/^https?:\/\//, 'wss://').replace(/^http:\/\//, 'ws://'),
     timestamp: new Date().toISOString()
   });
+});
+
+// WebSocket test endpoint - helps debug connectivity
+app.get('/test-websocket', (req, res) => {
+  const wsUrl = PUBLIC_URL.replace(/^https?:\/\//, 'wss://').replace(/^http:\/\//, 'ws://');
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>WebSocket Test</title>
+      <style>
+        body { font-family: monospace; padding: 20px; background: #1e1e1e; color: #d4d4d4; }
+        .success { color: #4ec9b0; }
+        .error { color: #f48771; }
+        .info { color: #4fc1ff; }
+        pre { background: #2d2d2d; padding: 15px; border-radius: 8px; }
+      </style>
+    </head>
+    <body>
+      <h1>WebSocket Connection Test</h1>
+      <p class="info">Testing connection to: ${wsUrl}</p>
+      <pre id="log"></pre>
+      <script>
+        const log = document.getElementById('log');
+        const ws = new WebSocket('${wsUrl}');
+
+        ws.onopen = () => {
+          log.innerHTML += '<span class="success">✓ WebSocket connected successfully!</span>\\n';
+          ws.send(JSON.stringify({ type: 'test', message: 'Hello from test page' }));
+        };
+
+        ws.onmessage = (event) => {
+          log.innerHTML += '<span class="info">← Received: ' + event.data + '</span>\\n';
+        };
+
+        ws.onerror = (error) => {
+          log.innerHTML += '<span class="error">✗ WebSocket error: ' + error + '</span>\\n';
+        };
+
+        ws.onclose = () => {
+          log.innerHTML += '<span class="info">✓ WebSocket closed</span>\\n';
+        };
+      </script>
+    </body>
+    </html>
+  `);
 });
 
 // Start server
