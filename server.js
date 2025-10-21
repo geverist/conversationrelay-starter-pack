@@ -150,21 +150,35 @@ app.get('/health', (req, res) => {
 
 // Start server
 server.listen(PORT, () => {
+  const WEBSOCKET_URL = PUBLIC_URL.replace(/^https?:\/\//, 'wss://').replace(/^http:\/\//, 'ws://');
+
   console.log('');
   console.log('🎙️  ConversationRelay Starter Pack');
   console.log('================================');
   console.log(`✓ Server running on port ${PORT}`);
   console.log(`✓ WebSocket server ready`);
   console.log(`✓ Public URL: ${PUBLIC_URL}`);
+  console.log(`✓ WebSocket URL: ${WEBSOCKET_URL}`);
   console.log('');
   console.log('📝 Configure your Twilio phone number:');
   console.log(`   Voice URL: ${PUBLIC_URL}/voice-handler`);
+  console.log('');
+  console.log('📡 ConversationRelay WebSocket URL:');
+  console.log(`   ${WEBSOCKET_URL}`);
   console.log('');
   console.log('🔧 Next steps:');
   console.log('   1. Complete handlers/voice-handler.js');
   console.log('   2. Complete handlers/websocket-handler.js');
   console.log('   3. Add your system prompt in config/system-prompt.js');
   console.log('');
+
+  // In Codespace, print helpful reminder
+  if (CODESPACE_NAME) {
+    console.log('💡 GitHub Codespace detected!');
+    console.log(`   Port 3000 is publicly accessible at:`);
+    console.log(`   ${PUBLIC_URL}`);
+    console.log('');
+  }
 });
 
 // Graceful shutdown
