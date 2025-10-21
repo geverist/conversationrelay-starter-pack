@@ -20,6 +20,7 @@
   },
 
   "postCreateCommand": "npm install && bash .devcontainer/startup.sh",
+  "postStartCommand": "bash .devcontainer/startup.sh",
 
   "customizations": {
     "vscode": {
