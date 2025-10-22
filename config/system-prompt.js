@@ -52,4 +52,4 @@ Examples:
 - Emergency response procedures
 `;
 
-module.exports = systemPrompt;
+export default systemPrompt;

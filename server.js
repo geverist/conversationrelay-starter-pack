@@ -1,13 +1,16 @@
-require('dotenv').config();
-const express = require('express');
-const http = require('http');
-const WebSocket = require('ws');
-const twilio = require('twilio');
-const VoiceResponse = twilio.twiml.VoiceResponse;
+import 'dotenv/config';
+import express from 'express';
+import http from 'http';
+import { WebSocketServer } from 'ws';
+import twilio from 'twilio';
+import voiceHandler from './handlers/voice-handler.js';
+import websocketHandler from './handlers/websocket-handler.js';
+
+const { twiml: { VoiceResponse } } = twilio;
 
 const app = express();
 const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
+const wss = new WebSocketServer({ server });
 
 // CORS middleware - allow all origins for workshop/development
 app.use((req, res, next) => {
@@ -57,10 +60,6 @@ if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN) {
 const twilioClient = (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN)
   ? twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
   : null;
-
-// Import handlers
-const voiceHandler = require('./handlers/voice-handler');
-const websocketHandler = require('./handlers/websocket-handler');
 
 // Routes
 app.get('/', (req, res) => {

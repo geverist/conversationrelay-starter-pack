@@ -1,6 +1,6 @@
-const OpenAI = require('openai');
-const systemPrompt = require('../config/system-prompt');
-const tools = require('./tools');
+import OpenAI from 'openai';
+import systemPrompt from '../config/system-prompt.js';
+import tools from './tools.js';
 
 /**
  * WebSocket Handler - Manages ConversationRelay WebSocket connection
@@ -15,7 +15,7 @@ const tools = require('./tools');
  * @param {WebSocket} ws - WebSocket connection from Twilio
  * @param {Object} config - Configuration object
  */
-function websocketHandler(ws, config) {
+export default function websocketHandler(ws, config) {
   const { streamSid, openaiApiKey, twilioClient } = config;
 
   console.log(`📞 ConversationRelay connected: ${streamSid}`);
@@ -245,5 +245,3 @@ function websocketHandler(ws, config) {
     console.error('❌ WebSocket error:', error);
   });
 }
-
-module.exports = websocketHandler;

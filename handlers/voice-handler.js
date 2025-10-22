@@ -1,5 +1,5 @@
-const twilio = require('twilio');
-const VoiceResponse = twilio.twiml.VoiceResponse;
+import twilio from 'twilio';
+const { twiml: { VoiceResponse } } = twilio;
 
 /**
  * Voice Handler - Generates TwiML for incoming/outgoing calls
@@ -11,7 +11,7 @@ const VoiceResponse = twilio.twiml.VoiceResponse;
  * @param {string} publicUrl - Your server's public URL
  * @returns {VoiceResponse} TwiML response
  */
-function voiceHandler(callData, publicUrl) {
+export default function voiceHandler(callData, publicUrl) {
   const twiml = new VoiceResponse();
 
   // TODO: Step 4 - Basic Call Handling
@@ -33,5 +33,3 @@ function voiceHandler(callData, publicUrl) {
 
   return twiml;
 }
-
-module.exports = voiceHandler;

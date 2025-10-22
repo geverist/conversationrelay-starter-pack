@@ -61,7 +61,7 @@ async function executeToolCall(toolName, args) {
 //   return { temperature: 72, condition: 'sunny' };
 // }
 
-module.exports = {
+export default {
   tools,
   executeToolCall
 };

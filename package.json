@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Your AI-powered voice assistant built with Twilio ConversationRelay",
   "main": "server.js",
+  "type": "module",
   "scripts": {
     "start": "node notify-deployment.js && node server.js",
     "dev": "nodemon server.js",
