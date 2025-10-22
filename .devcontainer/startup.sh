@@ -3,8 +3,14 @@
 # Startup script for Codespace
 echo "🚀 Starting Twilio Voice AI Workshop server..."
 
-# Make port 3000 public
-bash .devcontainer/setup.sh
+# Make port 3000 public using GitHub CLI (if available)
+if command -v gh &> /dev/null && [ -n "$CODESPACE_NAME" ]; then
+    echo "📡 Setting port 3000 to public visibility..."
+    gh codespace ports visibility 3000:public -c $CODESPACE_NAME 2>/dev/null || true
+fi
+
+# Make port 3000 public (legacy method)
+bash .devcontainer/setup.sh 2>/dev/null || true
 
 # Find the workspace directory
 WORKSPACE_DIR=$(find /workspaces -maxdepth 1 -type d -not -name workspaces | head -1)
